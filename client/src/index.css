@@ -50,7 +50,7 @@
 
 :root {
   /* Blue Primary - Trust & Meraki Berbagi Brand */
-  --primary: 210 90% 35%;
+  --primary: 228 50% 23%;
   --primary-foreground: 0 0% 100%;
 
   /* Soft Coral Secondary - Warmth & Sharing */
@@ -77,11 +77,11 @@
 
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;
-  --ring: 210 90% 35%;
+  --ring: 228 50% 23%;
 
   --radius: 0.75rem;
 
-  --chart-1: 210 90% 35%;
+  --chart-1: 228 50% 23%;
   --chart-2: 15 85% 55%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
@@ -89,7 +89,7 @@
 
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 222 47% 11%;
-  --sidebar-primary: 210 90% 35%;
+  --sidebar-primary: 228 50% 23%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 210 30% 96%;
   --sidebar-accent-foreground: 210 90% 35%;
