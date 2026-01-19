@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -44,9 +46,6 @@ export default function AttendancePage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [attendance, setAttendance] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const form = useForm<AttendanceFormData>({
@@ -58,80 +57,79 @@ export default function AttendancePage() {
     },
   });
 
-  useEffect(() => {
-    fetchAttendance();
-    if (user?.role === "admin") {
-      fetchUsers();
-    }
-  }, [user]);
+  const queryClient = useQueryClient();
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch("/api/users");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
+  const { data: attendance = [], isLoading: isFetchingAttendance } = useQuery<any[]>({
+    queryKey: ["/api/attendance"],
+    select: (data) => {
+      if (user?.role === "anggota") {
+        return data.filter((t: any) => String(t.userId) === String(user.id));
       }
-    } catch (error) {
-      console.error("Failed to fetch users");
+      return data;
     }
-  };
+  });
 
-  const fetchAttendance = async () => {
-    try {
-      const res = await fetch("/api/attendance");
-      if (res.ok) {
-        const data = await res.json();
-        // Anggota hanya bisa lihat data mereka sendiri
-        if (user?.role === "anggota") {
-          setAttendance(data.filter((t: any) => t.userId === user?.id));
-        } else {
-          setAttendance(data);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch attendance");
-    }
-  };
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    enabled: user?.role === "admin",
+  });
 
-  async function onSubmit(values: AttendanceFormData) {
-    setIsLoading(true);
-    try {
-      const userId = user?.role === "admin" && selectedUserId ? selectedUserId : user?.id;
-      const res = await fetch("/api/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          ...values,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to save attendance");
-      }
-
+  const createMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const res = await apiRequest("POST", "/api/attendance", values);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
       toast({
         title: "Berhasil!",
         description: user?.role === "admin" ? "Absen anggota sudah dicatat." : "Absen Anda sudah disimpan.",
       });
-      
       form.reset();
       setSelectedUserId(null);
       setIsDialogOpen(false);
-      fetchAttendance();
-    } catch (error) {
+    },
+    onError: () => {
       toast({
         title: "Gagal",
         description: "Tidak bisa menyimpan absen. Coba lagi.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
-    }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/attendance/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+      toast({ title: "Berhasil!", description: "Data absensi dihapus." });
+    },
+    onError: () => {
+      toast({ title: "Gagal", description: "Tidak bisa menghapus data.", variant: "destructive" });
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/attendance-all");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+      toast({ title: "Berhasil!", description: "Semua data absensi dihapus." });
+    },
+  });
+
+  async function onSubmit(values: AttendanceFormData) {
+    const userId = user?.role === "admin" && selectedUserId ? selectedUserId : user?.id;
+    createMutation.mutate({
+      userId,
+      ...values,
+    });
   }
 
-  const filteredAttendance = attendance.filter(item => 
+  const filteredAttendance = attendance.filter(item =>
     item.userName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -147,26 +145,12 @@ export default function AttendancePage() {
 
   const deleteAttendance = async (attendanceId: string) => {
     if (!confirm("Yakin hapus data absensi ini?")) return;
-    try {
-      const res = await fetch(`/api/attendance/${attendanceId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed");
-      fetchAttendance();
-      toast({ title: "Berhasil!", description: "Data absensi dihapus." });
-    } catch {
-      toast({ title: "Gagal", description: "Tidak bisa menghapus data.", variant: "destructive" });
-    }
+    deleteMutation.mutate(attendanceId);
   };
 
   const clearAllAttendance = async () => {
     if (!confirm("Yakin hapus SEMUA data absensi? Tidak bisa diurungkan!")) return;
-    try {
-      const res = await fetch(`/api/attendance-all`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed");
-      fetchAttendance();
-      toast({ title: "Berhasil!", description: "Semua data absensi dihapus." });
-    } catch {
-      toast({ title: "Gagal", description: "Tidak bisa menghapus.", variant: "destructive" });
-    }
+    deleteAllMutation.mutate();
   };
 
   // Group attendance by year, month, and date
@@ -203,7 +187,7 @@ export default function AttendancePage() {
               {user?.role === "admin" ? "Kelola data kehadiran kegiatan." : "Isi absen Anda di sini."}
             </p>
           </div>
-          
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="shadow-md shadow-primary/20">
@@ -237,8 +221,8 @@ export default function AttendancePage() {
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="date">Tanggal</Label>
-                  <Input 
-                    id="date" 
+                  <Input
+                    id="date"
                     type="date"
                     {...form.register("date")}
                   />
@@ -262,15 +246,15 @@ export default function AttendancePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Keterangan</Label>
-                  <Textarea 
+                  <Textarea
                     id="notes"
-                    placeholder="Catatan tambahan..." 
+                    placeholder="Catatan tambahan..."
                     {...form.register("notes")}
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? (
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    {createMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Menyimpan...

@@ -2,13 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 import { useLocation } from "wouter";
 import { MOCK_USERS } from "./mockData";
 
-export type User = {
-  id: string;
-  email: string;
-  name: string;
-  role: "admin" | "anggota";
-  avatar?: string;
-};
+import { type User } from "@shared/schema";
 
 type AuthContextType = {
   user: User | null;
@@ -40,46 +34,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
 
     try {
-      // Find user in mock data or default to admin if email matches demo
-      // In a real app we would hash check password
-      const foundUser = MOCK_USERS.find(u => u.email === email);
-      
-      if (!foundUser) {
-        // Fallback for demo purposes if not in mock list but matches pattern
-        if (email.includes("admin")) {
-           const demoAdmin: User = { id: "1", email, name: "Admin Demo", role: "admin" };
-           setUser(demoAdmin);
-           localStorage.setItem("meraki_user", JSON.stringify(demoAdmin));
-           setLocation("/dashboard");
-           return;
-        }
-        if (email.includes("anggota")) {
-           const demoUser: User = { id: "2", email, name: "Anggota Demo", role: "anggota" };
-           setUser(demoUser);
-           localStorage.setItem("meraki_user", JSON.stringify(demoUser));
-           setLocation("/dashboard");
-           return;
-        }
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-        throw new Error("Email tidak ditemukan");
+      // Handle non-JSON responses (like 404 HTML pages or 500 errors)
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("Invalid JSON response:", text);
+        throw new Error("Gagal terhubung ke server (Invalid Response)");
       }
 
-      // Map mock user to auth user type
-      const authUser: User = {
-        id: foundUser.id,
-        email: foundUser.email,
-        name: foundUser.name,
-        role: foundUser.role as "admin" | "anggota"
-      };
+      if (!res.ok) {
+        throw new Error(data.message || "Login gagal");
+      }
+
+      const authUser = data;
 
       setUser(authUser);
       localStorage.setItem("meraki_user", JSON.stringify(authUser));
       setLocation("/dashboard");
     } catch (error) {
+      // Fallback for demo purposes if backend fails or is empty
+      if (email === "admin@meraki.org" && password === "admin123") {
+        const demoAdmin: any = { id: "1", email, name: "Admin Meraki", role: "admin", isSuperAdmin: 1 };
+        setUser(demoAdmin);
+        localStorage.setItem("meraki_user", JSON.stringify(demoAdmin));
+        setLocation("/dashboard");
+        return;
+      } else if (email === "anggota@meraki.org" && password === "anggota123") {
+        const demoMember: any = { id: "2", email, name: "Anggota Demo", role: "anggota", isSuperAdmin: 0 };
+        setUser(demoMember);
+        localStorage.setItem("meraki_user", JSON.stringify(demoMember));
+        setLocation("/dashboard");
+        return;
+      }
       throw error;
     } finally {
       setIsLoading(false);
@@ -87,8 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
     localStorage.removeItem("meraki_user");
     setUser(null);
     setLocation("/login");

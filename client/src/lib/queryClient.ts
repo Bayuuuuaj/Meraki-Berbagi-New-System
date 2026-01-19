@@ -12,9 +12,26 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const apiUrl = import.meta.env.VITE_API_URL || "";
+
+  // Get stored user ID for audit trail
+  const storedUser = localStorage.getItem("meraki_user");
+  let userId = "system";
+  if (storedUser) {
+    try {
+      userId = JSON.parse(storedUser).id;
+    } catch (e) {
+      console.error("Failed to parse user for headers");
+    }
+  }
+
+  const res = await fetch(`${apiUrl}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      "ngrok-skip-browser-warning": "true",
+      "x-user-id": userId,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -28,18 +45,32 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
+    async ({ queryKey }) => {
+      const storedUser = localStorage.getItem("meraki_user");
+      let userId = "system";
+      if (storedUser) {
+        try {
+          userId = JSON.parse(storedUser).id;
+        } catch (e) {
+          console.error("Failed to parse user for query headers");
+        }
+      }
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
+      const res = await fetch(queryKey.join("/") as string, {
+        credentials: "include",
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          "x-user-id": userId,
+        },
+      });
 
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
+
+      await throwIfResNotOk(res);
+      return await res.json();
+    };
 
 export const queryClient = new QueryClient({
   defaultOptions: {
