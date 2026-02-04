@@ -1,0 +1,37 @@
+# Railway Ignore
+# Ignore heavy dependencies
+node_modules/
+attached_assets/
+.git/
+.vscode/
+
+# Ignore build outputs
+dist/
+.vite/
+.output/
+...
+
+# Ignore git
+.git/
+
+# Ignore large log files that cause timeout
+*.log
+*.txt
+*.csv
+dev_server.log
+ngrok_port3000.log
+
+# Ignore heavy tesseract data if any
+server/cache/tesseract/
+
+# Keep the basics
+!.gitignore
+!package.json
+!railway.json
+!Procfile
+!server/
+!client/
+!shared/
+!script/
+!drizzle.config.ts
+!tsconfig.json
