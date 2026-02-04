@@ -74,7 +74,15 @@ app.use((req, res, next) => {
   next();
 });
 
-async function main() {
+import { db, runMigrations } from "./db.ts";
+
+(async () => {
+  // Run migrations before starting server
+  if (process.env.NODE_ENV === "production") {
+    await runMigrations();
+  }
+
+  // Pass httpServer to registerRoutes as it sets up WebSockets/Socket.IO
   await registerRoutes(httpServer, app);
 
   // Register AI routes
@@ -107,6 +115,4 @@ async function main() {
   httpServer.listen(port, "0.0.0.0", () => {
     log(`Antigravity Engine Aktif di Port ${port}`);
   });
-}
-
-main().catch(console.error);
+})();

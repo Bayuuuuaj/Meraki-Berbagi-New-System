@@ -21,3 +21,26 @@ export const queryClient = postgres(connectionString, {
 });
 
 export const db = drizzle(queryClient, { schema });
+
+// Auto-migration helper for Railway Free Tier
+import { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
+
+export async function runMigrations() {
+    if (process.env.NODE_ENV === "production") {
+        console.log("🚀 Starting automatic database migration...");
+        try {
+            // Create a temporary drizzle config if needed, or pass params directly
+            // Since we can't easily use CLI with process.env in this context without a config file,
+            // we will rely on the drizzle-kit CLI being present and configured via env vars.
+            // Drizzle Kit automatically picks up DATABASE_URL from environment.
+
+            await execAsync("npx drizzle-kit push:pg");
+            console.log("✅ Database migration completed successfully!");
+        } catch (error) {
+            console.error("❌ Migration failed:", error);
+            // Don't exit process, let the app try to run anyway
+        }
+    }
+}
