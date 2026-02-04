@@ -6,13 +6,13 @@ import { useAuth } from "@/lib/auth";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
-  FormMessage 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ const loginSchema = z.object({
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const { toast } = useToast();
-  
+
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -71,17 +71,17 @@ export default function LoginPage() {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="nama@merakiberbagi.org" 
-                    className="h-12 bg-muted/30 border-input focus-visible:ring-primary/30" 
-                    {...field} 
+                  <Input
+                    placeholder="nama@merakiberbagi.org"
+                    className="h-12 bg-muted/30 border-input focus-visible:ring-primary/30 rounded-2xl"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="password"
@@ -94,11 +94,11 @@ export default function LoginPage() {
                   </Button>
                 </div>
                 <FormControl>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="h-12 bg-muted/30 border-input focus-visible:ring-primary/30"
-                    {...field} 
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    className="h-12 bg-muted/30 border-input focus-visible:ring-primary/30 rounded-2xl"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -106,9 +106,9 @@ export default function LoginPage() {
             )}
           />
 
-          <Button 
-            type="submit" 
-            className="w-full h-12 text-base font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all" 
+          <Button
+            type="submit"
+            className="w-full h-12 text-base font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -136,11 +136,11 @@ export default function LoginPage() {
           </span>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4">
-        <Button 
+        <Button
           type="button"
-          variant="outline" 
+          variant="outline"
           className="h-10 text-xs border-dashed border-border hover:bg-accent/50 hover:border-primary/50"
           onClick={() => {
             form.setValue("email", "admin@meraki.org");
@@ -149,9 +149,9 @@ export default function LoginPage() {
         >
           Demo Admin
         </Button>
-        <Button 
+        <Button
           type="button"
-          variant="outline" 
+          variant="outline"
           className="h-10 text-xs border-dashed border-border hover:bg-accent/50 hover:border-primary/50"
           onClick={() => {
             form.setValue("email", "anggota@meraki.org");

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 
 @plugin "tailwindcss-animate";
+/* PWA Cache Buster: 2026-01-24T20:40:00Z - Optimizing scroll behavior */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -171,6 +172,8 @@
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+    overflow-y: auto !important;
   }
 
   body {
@@ -178,8 +181,10 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overscroll-behavior: none;
-    touch-action: pan-x pan-y;
+    min-height: 100vh;
+    overflow-y: auto !important;
+    height: auto !important;
+    touch-action: manipulation;
   }
 
   h1,
@@ -386,5 +391,32 @@
       opacity: 1;
       transform: scale(1);
     }
+  }
+
+  /* Currency formatting with tabular numbers */
+  .currency {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Meraki Brand Colors */
+  .text-meraki-blue {
+    color: #2563eb;
+  }
+
+  .bg-meraki-blue {
+    background-color: #2563eb;
+  }
+
+  .border-meraki-blue {
+    border-color: #2563eb;
+  }
+
+  .hover\:bg-meraki-blue:hover {
+    background-color: #2563eb;
+  }
+
+  .hover\:bg-meraki-blue-dark:hover {
+    background-color: #1e40af;
   }
 }

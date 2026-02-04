@@ -16,63 +16,40 @@ import {
     cosineSimilarity,
     analyzeSentiment
 } from './ml-engine';
-import { GeminiService } from './gemini-service';
+import type { ReceiptData } from '../ocr-service-extreme';
 
 // ==================== DOCUMENT CATEGORIES ====================
 
 export const DOCUMENT_CATEGORIES = {
+    NOTA_KAS: 'nota_kas',
+    PROPOSAL_PROKER: 'proposal_proker',
     LAPORAN_KEGIATAN: 'laporan_kegiatan',
-    PROPOSAL: 'proposal',
-    KEUANGAN: 'keuangan',
-    NOTULEN: 'notulen',
-    SURAT: 'surat',
-    DOKUMENTASI: 'dokumentasi',
+    SURAT_KELUAR: 'surat_keluar',
     LAINNYA: 'lainnya'
 } as const;
 
 export type DocumentCategory = typeof DOCUMENT_CATEGORIES[keyof typeof DOCUMENT_CATEGORIES];
 
-// Training data for document classification
-const TRAINING_DATA = [
-    // Laporan Kegiatan
-    { content: 'laporan kegiatan bakti sosial pembagian sembako kepada masyarakat evaluasi hasil program', category: DOCUMENT_CATEGORIES.LAPORAN_KEGIATAN },
-    { content: 'hasil kegiatan volunteer relawan mengajar anak panti asuhan sukses lancar', category: DOCUMENT_CATEGORIES.LAPORAN_KEGIATAN },
-    { content: 'laporan pelaksanaan program kesehatan pemeriksaan gratis warga peserta hadir', category: DOCUMENT_CATEGORIES.LAPORAN_KEGIATAN },
-    { content: 'evaluasi kegiatan bulanan capaian target realisasi program kerja semester', category: DOCUMENT_CATEGORIES.LAPORAN_KEGIATAN },
-
-    // Proposal
-    { content: 'proposal program bantuan dana sponsorship pendanaan anggaran biaya', category: DOCUMENT_CATEGORIES.PROPOSAL },
-    { content: 'usulan kegiatan latar belakang tujuan manfaat sasaran jadwal pelaksanaan', category: DOCUMENT_CATEGORIES.PROPOSAL },
-    { content: 'proposal pengajuan kerjasama partnership mitra donatur sponsor', category: DOCUMENT_CATEGORIES.PROPOSAL },
-    { content: 'rencana program kerja timeline milestone deliverable outcome output', category: DOCUMENT_CATEGORIES.PROPOSAL },
-
-    // Keuangan
-    { content: 'laporan keuangan kas masuk keluar saldo rekening transfer pembayaran', category: DOCUMENT_CATEGORIES.KEUANGAN },
-    { content: 'bukti transaksi kwitansi nota invoice pembayaran pengeluaran pemasukan', category: DOCUMENT_CATEGORIES.KEUANGAN },
-    { content: 'anggaran budget biaya pengeluaran pemasukan pendapatan neraca laba rugi', category: DOCUMENT_CATEGORIES.KEUANGAN },
-    { content: 'rekapitulasi iuran kas wajib sukarela denda tunggakan pembayaran', category: DOCUMENT_CATEGORIES.KEUANGAN },
-
-    // Notulen
-    { content: 'notulen rapat agenda pembahasan keputusan hasil diskusi peserta hadir', category: DOCUMENT_CATEGORIES.NOTULEN },
-    { content: 'minutes meeting catatan rapat koordinasi evaluasi tindak lanjut', category: DOCUMENT_CATEGORIES.NOTULEN },
-    { content: 'risalah pertemuan poin pembahasan kesepakatan action item deadline', category: DOCUMENT_CATEGORIES.NOTULEN },
-    { content: 'berita acara rapat daftar hadir absensi peserta narasumber moderator', category: DOCUMENT_CATEGORIES.NOTULEN },
-
-    // Surat
-    { content: 'surat undangan mengundang kehadiran hadir acara kegiatan waktu tempat', category: DOCUMENT_CATEGORIES.SURAT },
-    { content: 'surat keterangan menerangkan bahwa bersangkutan anggota aktif organisasi', category: DOCUMENT_CATEGORIES.SURAT },
-    { content: 'surat permohonan mohon izin bantuan dukungan kerjasama hormat kami', category: DOCUMENT_CATEGORIES.SURAT },
-    { content: 'surat tugas menugaskan kepada melaksanakan berdasarkan demikian dibuat', category: DOCUMENT_CATEGORIES.SURAT },
-
-    // Dokumentasi
-    { content: 'foto kegiatan dokumentasi gambar visual album gallery event acara', category: DOCUMENT_CATEGORIES.DOKUMENTASI },
-    { content: 'video rekaman dokumentasi liputan media sosial publikasi posting', category: DOCUMENT_CATEGORIES.DOKUMENTASI },
-    { content: 'materi presentasi slide deck infografis design poster banner', category: DOCUMENT_CATEGORIES.DOKUMENTASI },
-    { content: 'arsip dokumen file backup storage database koleksi archive', category: DOCUMENT_CATEGORIES.DOKUMENTASI },
-];
-
-// Pre-trained classifier
-let documentClassifier = trainNaiveBayes(TRAINING_DATA);
+// Weighted Keyword Dictionary for Meraki-Berbagi offline intelligence
+const KEYWORD_DICTIONARY: Record<DocumentCategory, { keywords: string[]; weight: number }[]> = {
+    [DOCUMENT_CATEGORIES.NOTA_KAS]: [
+        { keywords: ['rp', 'total', 'toko', 'kwitansi', 'nota', 'harga', 'qty', 'jumlah', 'bayar', 'kembali'], weight: 2 },
+        { keywords: ['struk', 'kasir', 'belanja', 'pembelian', 'biaya'], weight: 1 }
+    ],
+    [DOCUMENT_CATEGORIES.PROPOSAL_PROKER]: [
+        { keywords: ['latar belakang', 'anggaran', 'tujuan', 'proposal', 'kegiatan', 'rencana', 'manfaat', 'pelaksanaan', 'sasaran'], weight: 2 },
+        { keywords: ['program', 'proker', 'panitia', 'pendanaan', 'kerja'], weight: 1 }
+    ],
+    [DOCUMENT_CATEGORIES.LAPORAN_KEGIATAN]: [
+        { keywords: ['realisasi', 'dokumentasi', 'laporan', 'agenda', 'hasil', 'evaluasi', 'dokumentasi', 'capaian', 'selesai'], weight: 2 },
+        { keywords: ['monitoring', 'kegiatan', 'sukses', 'hambatan', 'saran'], weight: 1 }
+    ],
+    [DOCUMENT_CATEGORIES.SURAT_KELUAR]: [
+        { keywords: ['nomor', 'perihal', 'yth', 'hormat kami', 'tembusan', 'lampiran', 'undangan', 'permohonan', 'keterangan'], weight: 2 },
+        { keywords: ['sehubungan', 'menindaklanjuti', 'organisasi', 'sekretariat'], weight: 1 }
+    ],
+    [DOCUMENT_CATEGORIES.LAINNYA]: []
+};
 
 // ==================== DOCUMENT SERVICE ====================
 
@@ -108,18 +85,50 @@ export interface SearchResult {
 }
 
 /**
- * Classify a document into predefined categories
+ * Classify a document into predefined categories using Weighted Keyword Engine
  */
 export function classifyDocument(content: string): ClassificationResult {
-    const result = classifyNaiveBayes(content, documentClassifier);
+    const lowerContent = content.toLowerCase();
+    const scores = new Map<string, number>();
 
-    const allScores = Array.from(result.scores.entries())
+    // Input Validation
+    if (content.length < 10 || /^(.)\1+$/.test(content.replace(/\s/g, ''))) {
+        return {
+            category: DOCUMENT_CATEGORIES.LAINNYA,
+            confidence: 0,
+            allScores: []
+        };
+    }
+
+    // Initialize scores
+    Object.values(DOCUMENT_CATEGORIES).forEach(cat => scores.set(cat, 0));
+
+    // Calculate scores based on keyword weights
+    for (const [category, categoriesKeywords] of Object.entries(KEYWORD_DICTIONARY)) {
+        let categoryScore = 0;
+        for (const entry of categoriesKeywords) {
+            for (const keyword of entry.keywords) {
+                const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+                const matches = content.match(regex);
+                if (matches) {
+                    categoryScore += matches.length * entry.weight;
+                }
+            }
+        }
+        scores.set(category, categoryScore);
+    }
+
+    const allScores = Array.from(scores.entries())
         .map(([category, score]) => ({ category, score }))
         .sort((a, b) => b.score - a.score);
 
+    const topResult = allScores[0];
+    const totalScore = allScores.reduce((sum, s) => sum + s.score, 0);
+    const confidence = totalScore > 0 ? topResult.score / totalScore : 0;
+
     return {
-        category: result.category as DocumentCategory,
-        confidence: result.confidence,
+        category: topResult.category as DocumentCategory,
+        confidence: confidence,
         allScores
     };
 }
@@ -169,19 +178,20 @@ export function searchDocuments(
 }
 
 /**
- * Generate document summary
+ * Generate document summary (Offline-First: extractive)
  */
 export async function summarizeDocument(
     content: string,
     maxSentences: number = 3
 ): Promise<string> {
-    if (GeminiService.isAvailable()) {
-        const prompt = `Summarize this document in Indonesian in ${maxSentences} sentences, capturing the main intent and key details:\n\n${content.substring(0, 2000)}`;
-        const aiSummary = await GeminiService.generateText(prompt);
-        if (aiSummary) return aiSummary.trim();
+    // Input Validation
+    if (content.length < 10 || /^(.)\1+$/.test(content.replace(/\s/g, ''))) {
+        return 'Data tidak valid atau terlalu sedikit untuk dianalisis';
     }
 
     const keySentences = extractKeySentences(content, maxSentences);
+    if (keySentences.length === 0) return 'Tidak dapat merangkum konten.';
+
     return keySentences.join('. ') + (keySentences.length > 0 ? '.' : '');
 }
 
@@ -262,7 +272,7 @@ export function analyzeDocumentPriority(
         return { level: 'high', reason: 'Laporan kegiatan memiliki sentimen negatif (masalah terdeteksi)' };
     }
 
-    if (category === DOCUMENT_CATEGORIES.KEUANGAN && (lowerText.includes('tunggakan') || lowerText.includes('defisit'))) {
+    if (category === DOCUMENT_CATEGORIES.NOTA_KAS && (lowerText.includes('tunggakan') || lowerText.includes('defisit'))) {
         return { level: 'critical', reason: 'Isu keuangan kritis terdeteksi (tunggakan/defisit)' };
     }
 
@@ -308,63 +318,42 @@ export async function processDocument(
 
 /**
  * AI-powered receipt data extraction for Meraki-Berbagi organizational spending
- * SPECIALIZED OCR VISION: Strict currency detection and grand total priority.
+ * 🔥 EXTREME: Using Tesseract.js with Heuristic Character Replacement
+ * Features: Threshold 185, O-to-0 correction, aggressive regex, deep merchant scan
  */
 export async function extractReceiptData(imageContent: string): Promise<any> {
-    const prompt = `
-      Anda adalah spesialis OCR Vision tingkat tinggi untuk Meraki-Berbagi.
-      
-      Tujuan: Ekstrak data transaksi dari foto nota/struk belanja.
-      
-      PERATURAN EKSTRAKSI KETAT:
-      1. Mata Uang: Cari simbol "Rp" untuk menentukan 'amount'. Jika ada beberapa angka, pastikan itu adalah nominal mata uang.
-      2. Prioritas Angka: Pilih 'Total' atau 'Grand Total'. JANGAN gunakan 'Subtotal' jika ada angka total akhir.
-      3. Keamanan Data: Jika teks sangat kabur atau tidak terbaca, JANGAN menebak angka. Berikan nilai NULL dan set confidenceScore di bawah 0.3.
-      4. Auto-Categorization: Analisis item belanja untuk menentukan kategori Meraki-Berbagi:
-         - "Beras", "Sembako", "Gula" -> "Logistik"
-         - "Sewa Tenda", "Sound System", "Sertifikat" -> "Program Kerja"
-         - "ATK", "Kertas", "Tinta Printer" -> "Operasional"
-         - "Nasi Kotak", "Air Mineral", "Konsumsi Rapat" -> "Konsumsi"
-         - "Bensin", "Gojek", "Tol" -> "Transportasi"
-         - Jika tidak cocok, masukkan ke "Lain-lain".
-
-      Hasilkan JSON dengan format (JSON ONLY):
-      {
-        "amount": number | null,
-        "category": "Program Kerja" | "Operasional" | "Logistik" | "Transportasi" | "Konsumsi" | "Lain-lain",
-        "date": "YYYY-MM-DD" | null,
-        "merchantName": "string" | null,
-        "items": [{ "name": "string", "price": number }],
-        "confidenceScore": number (0.0 - 1.0),
-        "isLegit": boolean,
-        "aiNotes": "Penjelasan singkat hasil ekstraksi"
-      }
-
-      Gunakan Bahasa Indonesia untuk aiNotes.
-    `;
+    // 🔥 EXTREME: Import the EXTREME OCR service with heuristic correction
+    const { extractReceiptWithTesseractExtreme } = await import('../ocr-service-extreme');
 
     try {
-        const result = await GeminiService.generateJSON(prompt);
+        const result: ReceiptData = await extractReceiptWithTesseractExtreme(imageContent);
+        console.log(`📄 Receipt extracted via ${result.ocrProvider?.toUpperCase() || 'UNKNOWN'} (confidence: ${result.confidence})`);
         return result;
     } catch (error) {
+        console.error('Receipt extraction failed:', error);
         return {
-            amount: null,
+            amount: 0,
+            merchantName: "Toko Tidak Dikenal",
             category: "Lain-lain",
+            date: null,
+            items: [],
+            confidence: "Low",
             confidenceScore: 0,
             isLegit: false,
-            aiNotes: "AI sedang berehat, logik standard organisasi tetap aktif."
+            aiNotes: "Sistem ekstraksi tidak tersedia. Silakan isi data secara manual.",
+            isInvalid: true,
+            ocrProvider: 'error'
         };
     }
 }
 
 /**
- * Re-train classifier with new data
+ * Re-train classifier (Ignored in Keyword Engine mode, preserved for API compatibility)
  */
 export function retrainClassifier(
     additionalData: { content: string; category: string }[]
 ): void {
-    const allData = [...TRAINING_DATA, ...additionalData];
-    documentClassifier = trainNaiveBayes(allData);
+    console.log("Retrain ignored: Keyword Engine is deterministic.");
 }
 
 /**

@@ -6,6 +6,7 @@ import { Trophy } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { AddMemberDialog } from "@/components/members/AddMemberDialog";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,33 +41,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { MoreHorizontal, UserPlus, Trash2, Loader2, Bell, Eye, X, Sparkles, MessageCircle, Medal, ExternalLink } from "lucide-react";
+import { MoreHorizontal, UserPlus, Trash2, Loader2, Bell, Eye, X, Sparkles, MessageCircle, Medal, ExternalLink, BellRing, RefreshCw } from "lucide-react";
 import AchievementSection from "@/components/profile/AchievementSection";
 import CertificateModal from "@/components/profile/CertificateModal";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const userSchema = z.object({
-  name: z.string().min(1, "Nama tidak boleh kosong"),
-  email: z.string().email("Email tidak valid"),
-  password: z.string().min(6, "Password minimal 6 karakter"),
-  role: z.enum(["admin", "anggota"]),
-  phone: z.string().optional(),
-  skills: z.string().optional(),
-});
 
 const notificationSchema = z.object({
   title: z.string().min(1, "Judul tidak boleh kosong"),
   message: z.string().min(1, "Pesan tidak boleh kosong"),
 });
 
-type UserFormData = z.infer<typeof userSchema>;
 type NotificationFormData = z.infer<typeof notificationSchema>;
+
 
 export default function MembersPage() {
   const { user: authUser } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [memberTreasury, setMemberTreasury] = useState<any[]>([]);
@@ -78,17 +70,10 @@ export default function MembersPage() {
   const [isCertificateModalOpen, setIsCertificateModalOpen] = useState(false);
   const [isCalculatingScore, setIsCalculatingScore] = useState(false);
 
-  const form = useForm<UserFormData>({
-    resolver: zodResolver(userSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      role: "anggota",
-      phone: "",
-      skills: "",
-    },
-  });
+  const [isReminderDialogOpen, setIsReminderDialogOpen] = useState(false);
+  const [reminderAmount, setReminderAmount] = useState("");
+  const [reminderNote, setReminderNote] = useState("");
+
 
   const notificationForm = useForm<NotificationFormData>({
     resolver: zodResolver(notificationSchema),
@@ -100,36 +85,51 @@ export default function MembersPage() {
 
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading: isFetchingUsers } = useQuery<any[]>({
-    queryKey: ["/api/users"],
-  });
+  // Payment Reminder Mutation
+  const remindMutation = useMutation({
+    mutationFn: async ({ userId, amount, note }: { userId: string, amount?: string, note?: string }) => {
+      const res = await apiRequest("POST", `/api/admin/remind-user/${userId}`, { amount, note });
 
-  const { data: treasuryData = [] } = useQuery<any[]>({
-    queryKey: ["/api/treasury"],
-  });
+      // If successful status, parse as JSON
+      if (res.ok) {
+        return res.json();
+      }
 
-  const createMutation = useMutation({
-    mutationFn: async (values: any) => {
-      const res = await apiRequest("POST", "/api/users", values);
-      return res.json();
+      // If error, try to get error message
+      try {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `HTTP ${res.status}: ${res.statusText}`);
+      } catch {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
         title: "Berhasil!",
-        description: `User ${data.name} berhasil dibuat.`,
+        description: data.message || "Pengingat pembayaran berhasil dikirim",
       });
-      form.reset();
-      setIsDialogOpen(false);
+      setIsReminderDialogOpen(false);
+      setReminderAmount("");
+      setReminderNote("");
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      console.error("Remind mutation error:", error);
       toast({
-        title: "Gagal",
-        description: error.message || "Tidak bisa membuat user.",
+        title: "Gagal Mengirim Pengingat",
+        description: error.message || "Terjadi kesalahan saat mengirim pengingat",
         variant: "destructive",
       });
     },
   });
+
+  const { data: users = [], isLoading: isFetchingUsers } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const { data: treasury = [] } = useQuery<any[]>({
+    queryKey: ["/api/treasury"],
+  });
+
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
@@ -184,9 +184,28 @@ export default function MembersPage() {
     },
   });
 
-  async function onSubmit(values: UserFormData) {
-    createMutation.mutate(values);
-  }
+  const recalculateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/recalculate-scores");
+      if (!res.ok) throw new Error("Gagal melakukan kalkulasi ulang");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Perhitungan Selesai",
+        description: "Skor dan lencana semua anggota telah diperbarui.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Gagal",
+        description: "Tidak bisa menghitung ulang skor.",
+        variant: "destructive",
+      });
+    },
+  });
+
 
   const deleteUser = async (userId: string) => {
     if (!confirm("Yakin hapus user ini?")) return;
@@ -227,14 +246,14 @@ export default function MembersPage() {
       message: "",
     });
 
-    const relevantTreasury = treasuryData.filter((t: any) => String(t.userId) === String(member.id));
+    const relevantTreasury = treasury.filter((t: any) => String(t.userId) === String(member.id));
     setMemberTreasury(relevantTreasury);
     setIsNotificationDialogOpen(true);
   };
 
   const openMemberPaymentProofs = async (member: any) => {
     setSelectedMember(member);
-    const memberProofs = treasuryData
+    const memberProofs = treasury
       .filter((t: any) => String(t.userId) === String(member.id) && t.proof && t.type === "in")
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setMemberPaymentProofs(memberProofs);
@@ -266,6 +285,23 @@ export default function MembersPage() {
     window.open(url, '_blank');
   };
 
+  const openReminderDialog = (member: any) => {
+    console.log("Opening reminder dialog for:", member.name);
+    setSelectedMember(member);
+    setReminderAmount("");
+    setReminderNote("");
+    setTimeout(() => setIsReminderDialogOpen(true), 0); // Force next tick update to prevent batching issues
+  };
+
+  const handleSendReminder = () => {
+    if (!selectedMember) return;
+    remindMutation.mutate({
+      userId: selectedMember.id,
+      amount: reminderAmount,
+      note: reminderNote
+    });
+  };
+
   // Only show this page to admins
   if (authUser?.role !== "admin") {
     return (
@@ -282,7 +318,7 @@ export default function MembersPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col space-y-6">
+      <div className="flex flex-col space-y-6 pb-32">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-heading font-bold tracking-tight text-foreground">
@@ -292,98 +328,19 @@ export default function MembersPage() {
               Kelola data anggota dan hak akses.
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="shadow-md shadow-primary/20">
-                <UserPlus className="mr-2 h-4 w-4" /> Tambah Anggota
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Tambah Anggota Baru</DialogTitle>
-                <DialogDescription>
-                  Buat akun baru untuk anggota atau admin.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nama Lengkap</Label>
-                  <Input
-                    id="name"
-                    placeholder="Contoh: Budi Santoso"
-                    {...form.register("name")}
-                  />
-                  {form.formState.errors.name && (
-                    <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="contoh@meraki.org"
-                    {...form.register("email")}
-                  />
-                  {form.formState.errors.email && (
-                    <p className="text-sm text-red-500">{form.formState.errors.email.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Minimal 6 karakter"
-                    {...form.register("password")}
-                  />
-                  {form.formState.errors.password && (
-                    <p className="text-sm text-red-500">{form.formState.errors.password.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={form.watch("role")} onValueChange={(value) => form.setValue("role", value as "admin" | "anggota")}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="anggota">Anggota</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Nomor WhatsApp</Label>
-                  <Input
-                    id="phone"
-                    placeholder="Contoh: 08123456789"
-                    {...form.register("phone")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="skills">Keahlian (Pisahkan dengan koma)</Label>
-                  <Input
-                    id="skills"
-                    placeholder="Contoh: Logistik, Pengajar, IT"
-                    {...form.register("skills")}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    {createMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Membuat...
-                      </>
-                    ) : (
-                      "Buat Akun"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => recalculateMutation.mutate()}
+              disabled={recalculateMutation.isPending}
+              className="gap-2"
+            >
+              <RefreshCw className={cn("w-4 h-4", recalculateMutation.isPending && "animate-spin")} />
+              Sync Skor & Badge
+            </Button>
+            <AddMemberDialog />
+          </div>
         </div>
 
         <Card className="shadow-sm">
@@ -394,7 +351,7 @@ export default function MembersPage() {
                 <Input
                   type="search"
                   placeholder="Cari nama, email, atau keahlian..."
-                  className="pl-4 h-9 bg-muted/50 border-none"
+                  className="pl-4 h-12 rounded-2xl bg-muted/50 border-none"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -505,6 +462,32 @@ export default function MembersPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {(() => {
+                          const userPayments = (treasury || []).filter((t: any) =>
+                            t.userId === u.id &&
+                            t.type === 'in' &&
+                            t.status === 'verified'
+                          );
+                          const thirtyDaysAgo = new Date();
+                          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                          const hasRecentPayment = userPayments.some((p: any) =>
+                            new Date(p.date) > thirtyDaysAgo
+                          );
+                          const hasUnpaidDues = !hasRecentPayment;
+
+                          return hasUnpaidDues && u.role !== 'admin' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openReminderDialog(u)}
+                              disabled={remindMutation.isPending}
+                              className="h-8 px-2 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                              title="Ingatkan pembayaran kas"
+                            >
+                              <BellRing className="h-4 w-4" />
+                            </Button>
+                          ) : null;
+                        })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8" disabled={u.isSuperAdmin === 1}>
@@ -534,14 +517,14 @@ export default function MembersPage() {
 
         {/* Notification Dialog */}
         <Dialog open={isNotificationDialogOpen} onOpenChange={setIsNotificationDialogOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Kirim Notifikasi Kas</DialogTitle>
               <DialogDescription>
                 Kirim pemberitahuan reminder kas ke {selectedMember?.name}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={notificationForm.handleSubmit(onNotificationSubmit)} className="space-y-4">
+            <form onSubmit={notificationForm.handleSubmit(onNotificationSubmit)} className="space-y-4 pb-20">
               {memberTreasury.length > 0 && (
                 <div className="space-y-2 border rounded-lg p-4 bg-muted/30">
                   <Label className="font-semibold">Riwayat Pembayaran Kas</Label>
@@ -640,7 +623,7 @@ export default function MembersPage() {
 
         {/* Member Payment Proofs Dialog */}
         <Dialog open={memberPaymentProofsOpen} onOpenChange={setMemberPaymentProofsOpen}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[700px]">
             <DialogHeader>
               <DialogTitle>Bukti Pembayaran - {selectedMember?.name}</DialogTitle>
               <DialogDescription>
@@ -721,7 +704,7 @@ export default function MembersPage() {
 
         {/* Achievement & Profile Dialog */}
         <Dialog open={isAchievementViewOpen} onOpenChange={setIsAchievementViewOpen}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[700px]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 Profil & Pencapaian - {selectedMember?.name}
@@ -800,7 +783,64 @@ export default function MembersPage() {
             }}
           />
         )}
+
+        {/* Custom Reminder Dialog */}
+        <Dialog open={isReminderDialogOpen} onOpenChange={setIsReminderDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600">
+                <BellRing className="w-5 h-5" />
+                Ingatkan Pembayaran
+              </DialogTitle>
+              <DialogDescription>
+                Kirim pengingat tagihan ke <strong>{selectedMember?.name}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="amount">Nominal Tagihan (Opsional)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">Rp</span>
+                  <Input
+                    id="amount"
+                    type="number"
+                    placeholder="0"
+                    className="pl-10"
+                    value={reminderAmount}
+                    onChange={(e) => setReminderAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="note">Catatan Tambahan</Label>
+                <Textarea
+                  id="note"
+                  placeholder="Contoh: Tunggakan bulan Januari & Februari"
+                  value={reminderNote}
+                  onChange={(e) => setReminderNote(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsReminderDialogOpen(false)}>Batal</Button>
+              <Button
+                onClick={handleSendReminder}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={remindMutation.isPending}
+              >
+                {remindMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Mengirim...
+                  </>
+                ) : (
+                  "Kirim Peringatan"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   );
 }

@@ -15,6 +15,28 @@ import { processDocumentSchema, meetingAnalysisSchema, financialPredictionSchema
 import { NLPService } from "./services/ai/nlp-service.ts";
 import { PredictiveService } from "./services/ai/predictive-service.ts";
 
+/**
+ * Helper to simulate word-by-word streaming over SSE
+ */
+async function sendStreamingResponse(res: Response, fullText: string, metadata: any) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Send metadata first
+    res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}\n\n`);
+
+    const words = fullText.split(' ');
+    for (let i = 0; i < words.length; i++) {
+        const chunk = words[i] + (i === words.length - 1 ? '' : ' ');
+        res.write(`data: ${JSON.stringify({ type: 'content', chunk })}\n\n`);
+        await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 40)); // 30-70ms delay
+    }
+
+    res.write(`data: [DONE]\n\n`);
+    res.end();
+}
+
 // Validation Middleware Helper
 const validate = (schema: z.ZodSchema) => (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -43,8 +65,18 @@ export function registerAIRoutes(app: Express): void {
      */
     app.post("/api/ai/documents/process", validate(processDocumentSchema), async (req, res) => {
         try {
-            const { title, content } = req.body;
+            const { title, content, stream = false } = req.body;
             const result = await DocumentService.processDocument(title, content);
+
+            if (stream) {
+                return sendStreamingResponse(res, result.summary, {
+                    category: result.category,
+                    confidence: result.confidence,
+                    keywords: result.keywords,
+                    entities: result.entities,
+                    priority: result.priority
+                });
+            }
 
             logger.info("Document Processed", { title, summaryLength: result.summary.length });
 
@@ -145,12 +177,25 @@ export function registerAIRoutes(app: Express): void {
      */
     app.post("/api/ai/meetings/summarize", async (req, res) => {
         try {
-            const { notes, title } = req.body;
+            const { notes, title, stream = false } = req.body;
             if (!notes) return res.status(400).json({ message: "Meeting notes are required" });
 
             const summary = MeetingService.generateMeetingSummary(notes, title);
             const actionItems = MeetingService.extractActionItems(notes);
             const sentiment = MeetingService.analyzeMeetingSentiment(notes);
+
+            if (stream && summary !== 'Data tidak valid atau terlalu sedikit untuk dianalisis') {
+                return sendStreamingResponse(res, summary, {
+                    actionItems,
+                    sentiment: {
+                        score: sentiment.overallScore,
+                        label: sentiment.label,
+                        positiveAspects: sentiment.positiveAspects,
+                        negativeAspects: sentiment.negativeAspects,
+                        suggestions: sentiment.suggestions
+                    }
+                });
+            }
 
             res.json({
                 success: true,
@@ -219,17 +264,19 @@ export function registerAIRoutes(app: Express): void {
 
             const activeMemberCount = users.filter(u => u.isActive === 1).length;
 
-            const transactions: Transaction[] = treasuryData.map(t => ({
-                id: t.id,
-                userId: t.userId,
-                userName: users.find(u => u.id === t.userId)?.name,
-                amount: t.amount,
-                type: t.type as 'in' | 'out',
-                category: t.category,
-                date: new Date(t.date),
-                notes: t.notes || undefined,
-                status: t.status
-            }));
+            const transactions: Transaction[] = treasuryData
+                .filter(t => t.status === 'verified')
+                .map(t => ({
+                    id: t.id,
+                    userId: t.userId,
+                    userName: users.find(u => u.id === t.userId)?.name,
+                    amount: t.amount,
+                    type: t.type as 'in' | 'out',
+                    category: t.category,
+                    date: new Date(t.date),
+                    notes: t.notes || undefined,
+                    status: t.status
+                }));
 
             const attendanceRecords: AttendanceRecord[] = attendanceData.map(a => ({
                 id: a.id,
@@ -262,17 +309,19 @@ export function registerAIRoutes(app: Express): void {
                 storage.getAllUsers()
             ]);
 
-            const transactions: Transaction[] = treasuryData.map(t => ({
-                id: t.id,
-                userId: t.userId,
-                userName: users.find(u => u.id === t.userId)?.name,
-                amount: t.amount,
-                type: t.type as 'in' | 'out',
-                category: t.category,
-                date: new Date(t.date),
-                notes: t.notes || undefined,
-                status: t.status
-            }));
+            const transactions: Transaction[] = treasuryData
+                .filter(t => t.status === 'verified')
+                .map(t => ({
+                    id: t.id,
+                    userId: t.userId,
+                    userName: users.find(u => u.id === t.userId)?.name,
+                    amount: t.amount,
+                    type: t.type as 'in' | 'out',
+                    category: t.category,
+                    date: new Date(t.date),
+                    notes: t.notes || undefined,
+                    status: t.status
+                }));
 
             const fraudIndicators = RiskService.detectFraudulentTransactions(transactions);
 
@@ -340,17 +389,19 @@ export function registerAIRoutes(app: Express): void {
                 storage.getAllUsers()
             ]);
 
-            const transactions: Transaction[] = treasuryData.map(t => ({
-                id: t.id,
-                userId: t.userId,
-                userName: users.find(u => u.id === t.userId)?.name,
-                amount: t.amount,
-                type: t.type as 'in' | 'out',
-                category: t.category,
-                date: new Date(t.date),
-                notes: t.notes || undefined,
-                status: t.status
-            }));
+            const transactions: Transaction[] = treasuryData
+                .filter(t => t.status === 'verified')
+                .map(t => ({
+                    id: t.id,
+                    userId: t.userId,
+                    userName: users.find(u => u.id === t.userId)?.name,
+                    amount: t.amount,
+                    type: t.type as 'in' | 'out',
+                    category: t.category,
+                    date: new Date(t.date),
+                    notes: t.notes || undefined,
+                    status: t.status
+                }));
 
             const prediction = await RiskService.predictFinancialTrends(
                 transactions,
@@ -378,17 +429,19 @@ export function registerAIRoutes(app: Express): void {
 
             const activeMembers = users.filter(u => u.isActive === 1);
 
-            const transactions: Transaction[] = treasuryData.map(t => ({
-                id: t.id,
-                userId: t.userId,
-                userName: users.find(u => u.id === t.userId)?.name,
-                amount: t.amount,
-                type: t.type as 'in' | 'out',
-                category: t.category,
-                date: new Date(t.date),
-                notes: t.notes || undefined,
-                status: t.status
-            }));
+            const transactions: Transaction[] = treasuryData
+                .filter(t => t.status === 'verified')
+                .map(t => ({
+                    id: t.id,
+                    userId: t.userId,
+                    userName: users.find(u => u.id === t.userId)?.name,
+                    amount: t.amount,
+                    type: t.type as 'in' | 'out',
+                    category: t.category,
+                    date: new Date(t.date),
+                    notes: t.notes || undefined,
+                    status: t.status
+                }));
 
             const attendanceRecords: AttendanceRecord[] = attendanceData.map(a => ({
                 id: a.id,
@@ -398,13 +451,69 @@ export function registerAIRoutes(app: Express): void {
                 status: a.status as 'hadir' | 'izin' | 'sakit' | 'alpha'
             }));
 
+            // 1. Efficiency Score & Zero State Logic
+            if (transactions.length === 0) {
+                return res.json({
+                    success: true,
+                    data: {
+                        learningMode: true,
+                        riskScore: {
+                            overall: 0,
+                            trend: 'stable',
+                            details: { overall: 'Belum ada data transaksi yang diverifikasi. Hubungkan dengan Kas untuk memulai analisis.' }
+                        },
+                        alerts: [],
+                        habits: [],
+                        summary: {
+                            totalTransactions: 0,
+                            suspiciousTransactions: 0,
+                            totalMembers: activeMembers.length,
+                            complianceRate: 0,
+                            financialTrend: 'neutral',
+                            pendingHITL: treasuryData.filter(t => t.status === 'pending').length
+                        },
+                        predictions: [],
+                        predictedPeriods: [],
+                        auditSummary: "Belum ada data untuk dianalisis."
+                    }
+                });
+            }
+
+            // Learning Mode Logic: Jika data < 5 transaksi terverifikasi
+            if (transactions.length < 5) {
+                return res.json({
+                    success: true,
+                    data: {
+                        learningMode: true,
+                        riskScore: {
+                            overall: Math.min(transactions.length * 2, 8),
+                            trend: 'stable',
+                            details: { overall: 'AI sedang mempelajari pola pengeluaran. Minimal 5 transaksi terverifikasi diperlukan untuk analisis mendalam.' }
+                        },
+                        alerts: [],
+                        habits: [],
+                        summary: {
+                            totalTransactions: transactions.length,
+                            suspiciousTransactions: 0,
+                            totalMembers: activeMembers.length,
+                            complianceRate: 100,
+                            financialTrend: 'stable',
+                            pendingHITL: treasuryData.filter(t => t.status === 'pending').length
+                        },
+                        predictions: [],
+                        predictedPeriods: [],
+                        auditSummary: "Menunggu Input Data Transaksi (Minimal 5)"
+                    }
+                });
+            }
+
             // Run analyses
             const fraudIndicators = RiskService.detectFraudulentTransactions(transactions);
             const complianceStatuses = RiskService.monitorAttendanceCompliance(attendanceRecords);
             const financialPrediction = await RiskService.predictFinancialTrends(transactions, 'balance');
             const habits = RiskService.analyzeOrganizationalHabits(transactions, attendanceRecords);
 
-            const pendingTreasuryCount = transactions.filter(t => t.status !== 'verified').length;
+            const pendingTreasuryCount = treasuryData.filter(t => t.status !== 'verified').length;
             const riskScore = RiskService.calculateRiskScore(
                 fraudIndicators,
                 complianceStatuses,
@@ -420,6 +529,7 @@ export function registerAIRoutes(app: Express): void {
             res.json({
                 success: true,
                 data: {
+                    learningMode: false,
                     riskScore,
                     alerts: alerts.slice(0, 5),
                     habits,
@@ -430,8 +540,10 @@ export function registerAIRoutes(app: Express): void {
                         complianceRate: complianceStatuses.length > 0
                             ? Math.round((complianceStatuses.filter(s => s.status === 'compliant').length / complianceStatuses.length) * 100)
                             : 100,
-                        financialTrend: financialPrediction.trend
+                        financialTrend: financialPrediction.trend,
+                        pendingHITL: treasuryData.filter(t => t.status === 'pending').length
                     },
+                    auditSummary: "Sistem Keuangan Bersih & Terverifikasi",
                     predictions: financialPrediction.predictions,
                     predictedPeriods: financialPrediction.periods
                 }
@@ -581,28 +693,39 @@ export function registerAIRoutes(app: Express): void {
      */
     app.post("/api/ai/treasury/verify", async (req, res) => {
         try {
-            const { transactionId, status, verifierName } = req.body;
+            const { transactionId, status, verifierName, updatedData } = req.body;
             const userId = req.headers['x-user-id'] as string || "system";
+
             if (!transactionId || !status) {
                 return res.status(400).json({ message: "Transaction ID and status are required" });
             }
 
-            const treasury = await storage.getTreasury(transactionId);
-            if (!treasury) {
+            const existingTreasury = await storage.getTreasury(transactionId);
+            if (!existingTreasury) {
                 return res.status(404).json({ message: "Transaction not found" });
             }
 
-            // Update verification status with auditor metadata
-            const updatedProfile = {
+            // Update verification status with auditor metadata + optional manual corrections
+            const updates: any = {
                 verificationStatus: status,
                 verifiedBy: verifierName || "Bendahara",
                 verifiedAt: new Date(),
-                status: status === 'verified' ? 'verified' : (status === 'flagged' ? 'flagged' : treasury.status)
+                status: status === 'verified' ? 'verified' : (status === 'flagged' ? 'flagged' : existingTreasury.status)
             };
 
-            const updated = await storage.updateTreasury(transactionId, updatedProfile, { userId, ip: req.ip || "" });
+            // If user corrected data in the UI, apply it here
+            if (updatedData && status === 'verified') {
+                if (updatedData.amount) updates.amount = updatedData.amount;
+                if (updatedData.category) updates.category = updatedData.category;
+                if (updatedData.date) updates.date = updatedData.date;
+                if (updatedData.merchantName) {
+                    updates.notes = `AI Extracted (Verified): ${updatedData.merchantName}`;
+                }
+            }
 
-            logger.info("Transaction Verified", { transactionId, status, verifier: updatedProfile.verifiedBy });
+            const updated = await storage.updateTreasury(transactionId, updates, { userId, ip: req.ip || "" });
+
+            logger.info("Transaction Verified", { transactionId, status, verifier: updates.verifiedBy });
 
             res.json({ success: true, data: updated });
         } catch (error) {
@@ -658,27 +781,55 @@ export function registerAIRoutes(app: Express): void {
             if (!content) return res.status(400).json({ message: "Content is required" });
 
             const result = await DocumentService.extractReceiptData(content);
-
-            // AUTOMATION: Create a PENDING_VERIFICATION transaction if data is legit
-            if (result.isLegit) {
-                const user = await storage.getUserByEmail("admin@meraki.org"); // Default to admin for now
-                if (user) {
-                    await storage.createTreasury({
-                        userId: user.id,
-                        date: result.date || new Date().toISOString().split('T')[0],
-                        amount: result.amount || 0,
-                        type: "out",
-                        category: result.category || "Lainnya",
-                        notes: `AI Extracted from Receipt: ${result.merchantName}`,
-                        status: "pending",
-                        verificationStatus: "pending",
-                        createdBy: "AI_EXTRACTOR",
-                        aiMetadata: JSON.stringify(result)
-                    }, { userId, ip: req.ip || "" });
-                }
+            if (!result) {
+                return res.status(500).json({ success: false, message: "Gagal mengekstrak nota" });
             }
 
-            res.json({ success: true, data: result });
+            // ✅ CROSS-VALIDATION FLAG: Jika OCR baca Rp 0 atau nominal tidak masuk akal
+            if (!result.amount || result.amount <= 0 || result.confidenceScore < 0.3) {
+                return res.json({
+                    success: true,
+                    data: {
+                        ...result,
+                        isInvalid: true,
+                        aiNotes: "Data tidak valid: Nominal Rp 0 atau kualitas gambar buruk. Silakan isi manual."
+                    }
+                });
+            }
+
+            let transactionId: string | undefined;
+
+            // AUTOMATION: Create a PENDING_VERIFICATION transaction
+            // We ALWAYS create a record now, so the manual verification modal has an ID to update
+            const xUserId = req.headers['x-user-id'] as string;
+            let targetUserId = userId; // default from "system" or headers
+
+            if (xUserId && xUserId !== "undefined" && xUserId !== "null") {
+                targetUserId = xUserId;
+            } else {
+                // Fallback to a default admin if no user ID provided
+                const admin = await storage.getUserByEmail("admin@meraki.org");
+                if (admin) targetUserId = admin.id;
+            }
+
+            if (targetUserId && targetUserId !== "system") {
+                const record = await storage.createTreasury({
+                    userId: targetUserId,
+                    date: result.date || new Date().toISOString().split('T')[0],
+                    amount: result.amount || 0,
+                    type: "out",
+                    category: result.category || "Lainnya",
+                    notes: `AI Extracted from Receipt: ${result.merchantName || 'Nota'}`,
+                    status: "pending",
+                    verificationStatus: "pending",
+                    createdBy: "AI_EXTRACTOR",
+                    aiMetadata: JSON.stringify(result)
+                }, { userId: targetUserId, ip: req.ip || "" });
+
+                transactionId = record.id;
+            }
+
+            res.json({ success: true, data: { ...result, id: transactionId } });
         } catch (error) {
             logger.error("AI Receipt Extraction Error", { error });
             res.status(500).json({ message: "Failed to extract receipt data" });

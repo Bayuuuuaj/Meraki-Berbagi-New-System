@@ -14,17 +14,29 @@ interface AIAdvisorPanelProps {
     anomalies?: Anomaly[];
     efficiencyScore?: number;
     isLoading?: boolean;
+    learningMode?: boolean;
+    totalTransactions?: number;
 }
 
 export default function AIAdvisorPanel({
     advice = "",
     anomalies = [],
     efficiencyScore = 0,
-    isLoading = false
+    isLoading = false,
+    learningMode = false,
+    totalTransactions = 0
 }: AIAdvisorPanelProps) {
+    const hasData = totalTransactions > 0;
+    const displayScore = hasData ? efficiencyScore : 0;
+    const displayAdvice = hasData
+        ? (advice || "Sedang menganalisis stabilitas keuangan organisasi...")
+        : "Sistem siap menerima data untuk analisis perdana";
+    const auditMessage = hasData
+        ? "Sistem Keuangan Bersih. Tidak ada anomali terdeteksi bulan ini."
+        : "Belum ada data untuk diaudit";
 
     const handleCopySummary = () => {
-        const summary = `### Laporan Audit AI - Meraki-Berbagi\n\nEfficiency Score: ${efficiencyScore}/10\n\n**Analisis Terdeteksi:**\n${anomalies.map(a => `- ${a.reason}`).join('\n')}\n\n**Nasihat Strategis:**\n${advice}`;
+        const summary = `### Laporan Audit AI - Meraki-Berbagi\n\nEfficiency Score: ${displayScore}/10\n\n**Analisis Terdeteksi:**\n${anomalies.map(a => `- ${a.reason}`).join('\n')}\n\n**Nasihat Strategis:**\n${displayAdvice}`;
         navigator.clipboard.writeText(summary);
     };
 
@@ -54,13 +66,13 @@ export default function AIAdvisorPanel({
                     </div>
                     <div className="relative">
                         <p className="text-lg leading-relaxed text-foreground/80 font-medium italic">
-                            "{advice || "Sedang menganalisis stabilitas keuangan organisasi..."}"
+                            "{displayAdvice}"
                         </p>
                     </div>
                     <div className="mt-8 flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                         <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                            Live Audit Active
+                            <div className={`w-2 h-2 rounded-full ${learningMode ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
+                            {learningMode ? 'AI Learning Mode' : 'Live Audit Active'}
                         </div>
                         <div className="w-px h-4 bg-border" />
                         <div>Gemini 1.5 Flash Enabled</div>
@@ -89,20 +101,22 @@ export default function AIAdvisorPanel({
                             strokeWidth="8"
                             fill="transparent"
                             strokeDasharray={2 * Math.PI * 58}
-                            strokeDashoffset={2 * Math.PI * 58 * (1 - efficiencyScore / 10)}
+                            strokeDashoffset={2 * Math.PI * 58 * (1 - displayScore / 10)}
                             strokeLinecap="round"
-                            className="text-primary transition-all duration-1000 ease-in-out"
+                            className={`${!hasData ? 'text-blue-300' : 'text-primary'} transition-all duration-1000 ease-in-out`}
                         />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-4xl font-black text-foreground">{efficiencyScore}<span className="text-sm text-muted-foreground">/10</span></span>
+                        <span className="text-4xl font-black text-foreground">{displayScore}<span className="text-sm text-muted-foreground">/10</span></span>
                     </div>
                 </div>
                 <div className="mt-4">
                     <h4 className="font-bold text-foreground">Efficiency Score</h4>
                     <p className="text-xs text-muted-foreground mt-1">Rasio Program vs Operasional</p>
                 </div>
-                <Badge variant="secondary" className="mt-4 bg-primary/10 text-primary border-none">Excellent Health</Badge>
+                <Badge variant="secondary" className={`mt-4 border-none ${!hasData ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`}>
+                    {!hasData ? 'Initial State' : 'Excellent Health'}
+                </Badge>
             </Card>
 
             {/* 3. Anomaly Alerts (Soft Red Design) */}
@@ -129,7 +143,9 @@ export default function AIAdvisorPanel({
                     ) : (
                         <div className="col-span-3 text-center py-8">
                             <Sparkles className="w-8 h-8 text-primary/40 mx-auto mb-3" />
-                            <p className="text-muted-foreground italic">Sistem Keuangan Bersih. Tidak ada anomali terdeteksi bulan ini.</p>
+                            <p className="text-muted-foreground italic">
+                                {anomalies.length > 0 ? "Temuan terdeteksi." : auditMessage}
+                            </p>
                         </div>
                     )}
                 </div>

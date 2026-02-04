@@ -12,18 +12,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute bottom-[10%] right-[10%] w-[50%] h-[50%] rounded-full bg-secondary mix-blend-multiply blur-3xl" />
         </div>
 
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="p-2 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 shadow-strong">
-            <img
-              src={logoImage}
-              alt="Meraki Berbagi Logo"
-              className="h-12 w-12 rounded-lg object-cover"
-            />
-          </div>
-          <div className="flex flex-col leading-tight" style={{ fontFamily: "'Paytone One', sans-serif" }}>
-            <h1 className="text-2xl font-bold tracking-tight">Meraki Berbagi</h1>
-            <p className="text-xs text-primary-foreground/80 uppercase tracking-widest font-semibold">Platform Kebaikan</p>
-          </div>
+        <div className="relative z-10 flex items-center">
+          <img
+            src="/images/logo-meraki.png"
+            alt="Meraki Berbagi Logo"
+            className="h-24 w-auto object-contain drop-shadow-lg"
+          />
         </div>
 
         <div className="relative z-10 max-w-lg space-y-8">

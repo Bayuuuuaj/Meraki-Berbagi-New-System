@@ -1,10 +1,10 @@
 # Ngrok Tunnel Startup Script
-# This script starts ngrok tunnel on port 5000 and displays the public URL
+# This script starts ngrok tunnel on port 3000 and displays the public URL
 
-Write-Host "Starting ngrok tunnel on port 5000..." -ForegroundColor Cyan
+Write-Host "Starting ngrok tunnel on port 3000..." -ForegroundColor Cyan
 
 # Start ngrok in a new window
-Start-Process ngrok -ArgumentList "http 5000" -WindowStyle Normal
+Start-Process ngrok -ArgumentList "http 3000" -WindowStyle Normal
 
 # Wait for ngrok to initialize
 Write-Host "Waiting for ngrok to initialize..." -ForegroundColor Yellow
@@ -22,7 +22,7 @@ try {
         Write-Host "Public URL: " -NoNewline -ForegroundColor White
         Write-Host "$publicUrl" -ForegroundColor Cyan
         Write-Host "Local URL:  " -NoNewline -ForegroundColor White
-        Write-Host "http://localhost:5000" -ForegroundColor Cyan
+        Write-Host "http://localhost:3000" -ForegroundColor Cyan
         Write-Host "Dashboard:  " -NoNewline -ForegroundColor White
         Write-Host "http://localhost:4040" -ForegroundColor Cyan
         Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray

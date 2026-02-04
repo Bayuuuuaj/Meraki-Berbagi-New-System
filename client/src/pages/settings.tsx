@@ -93,7 +93,7 @@ export default function SettingsPage() {
 
     return (
         <DashboardLayout>
-            <div className="space-y-6">
+            <div className="space-y-6 pb-32">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Pengaturan & Profil</h1>
                     <p className="text-muted-foreground">Kelola akun Anda dan konfigurasi sistem.</p>
@@ -232,7 +232,7 @@ export default function SettingsPage() {
                                                 <FormItem>
                                                     <FormLabel>Password Saat Ini</FormLabel>
                                                     <FormControl>
-                                                        <Input type="password" placeholder="••••••••" {...field} />
+                                                        <Input type="password" placeholder="••••••••" className="h-12 rounded-2xl" {...field} />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -245,7 +245,7 @@ export default function SettingsPage() {
                                                 <FormItem>
                                                     <FormLabel>Password Baru</FormLabel>
                                                     <FormControl>
-                                                        <Input type="password" placeholder="••••••••" {...field} />
+                                                        <Input type="password" placeholder="••••••••" className="h-12 rounded-2xl" {...field} />
                                                     </FormControl>
                                                     <FormDescription>Minimal 8 karakter.</FormDescription>
                                                     <FormMessage />
@@ -312,6 +312,86 @@ export default function SettingsPage() {
                                         <AlertTitle className="text-primary font-bold">Info Transparansi</AlertTitle>
                                         <AlertDescription className="text-xs opacity-90">
                                             Setiap pengiriman notifikasi akan dicatat dalam Audit Logs. Anda dapat mematikan fitur ini kapan saja jika kredensial API WhatsApp sedang bermasalah atau kuota habis.
+                                        </AlertDescription>
+                                    </Alert>
+                                </CardContent>
+                            </Card>
+
+                            {/* Anomaly Detection Configuration */}
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-center gap-2">
+                                        <Shield className="w-5 h-5 text-primary" />
+                                        <CardTitle>Konfigurasi Deteksi Anomali</CardTitle>
+                                    </div>
+                                    <CardDescription>
+                                        Atur threshold untuk mendeteksi transaksi mencurigakan di Intelligence Dashboard.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="threshold-amount" className="text-base font-semibold">
+                                            Batas Transaksi Besar (Rp)
+                                        </Label>
+                                        <p className="text-sm text-muted-foreground">
+                                            Transaksi di atas jumlah ini tanpa bukti foto akan ditandai sebagai anomali kritis.
+                                        </p>
+                                        {isLoading ? (
+                                            <Skeleton className="h-12 w-full" />
+                                        ) : (
+                                            <Input
+                                                id="threshold-amount"
+                                                type="number"
+                                                className="h-12 rounded-2xl"
+                                                placeholder="1000000"
+                                                defaultValue={settings?.find(s => s.key === "anomaly_threshold_amount")?.value || "1000000"}
+                                                onBlur={(e) => {
+                                                    const value = e.target.value;
+                                                    if (value && parseInt(value) > 0) {
+                                                        mutation.mutate({ key: "anomaly_threshold_amount", value });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            Default: Rp 1.000.000 (1 juta rupiah)
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="duplicate-hours" className="text-base font-semibold">
+                                            Sensitivitas Duplikasi (Jam)
+                                        </Label>
+                                        <p className="text-sm text-muted-foreground">
+                                            Transaksi identik (nominal + kategori) dalam rentang waktu ini akan ditandai sebagai duplikasi.
+                                        </p>
+                                        {isLoading ? (
+                                            <Skeleton className="h-12 w-full" />
+                                        ) : (
+                                            <Input
+                                                id="duplicate-hours"
+                                                type="number"
+                                                className="h-12 rounded-2xl"
+                                                placeholder="24"
+                                                defaultValue={settings?.find(s => s.key === "anomaly_duplicate_hours")?.value || "24"}
+                                                onBlur={(e) => {
+                                                    const value = e.target.value;
+                                                    if (value && parseInt(value) > 0) {
+                                                        mutation.mutate({ key: "anomaly_duplicate_hours", value });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            Default: 24 jam
+                                        </p>
+                                    </div>
+
+                                    <Alert className="bg-amber-50 border-amber-200">
+                                        <Info className="h-4 w-4 text-amber-600" />
+                                        <AlertTitle className="text-amber-900 font-bold">Perhatian</AlertTitle>
+                                        <AlertDescription className="text-xs text-amber-800">
+                                            Perubahan threshold akan langsung diterapkan pada Intelligence Dashboard. Threshold yang terlalu rendah dapat menghasilkan banyak false positive.
                                         </AlertDescription>
                                     </Alert>
                                 </CardContent>

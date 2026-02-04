@@ -19,11 +19,13 @@ export function calculateRunway(balance: number, transactions: any[]): string {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
     const totalExpenses = transactions
-        .filter(t => new Date(t.date) >= threeMonthsAgo && t.type === 'out')
+        .filter(t => t.status === 'verified' && new Date(t.date) >= threeMonthsAgo && t.type === 'out')
         .reduce((sum, t) => sum + t.amount, 0);
 
     const avgMonthlyExpense = totalExpenses / 3;
 
-    if (avgMonthlyExpense <= 0) return "∞";
-    return (balance / avgMonthlyExpense).toFixed(1);
+    // ✅ Requirement: Jika saldo Rp 0 atau pengeluaran tidak ada, jangan tampilkan tak terhingga
+    if (balance <= 0 || avgMonthlyExpense <= 0) return "Input Data untuk Analisis";
+
+    return (balance / avgMonthlyExpense).toFixed(1) + " Bulan";
 }

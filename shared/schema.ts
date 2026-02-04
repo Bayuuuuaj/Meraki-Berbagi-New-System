@@ -42,6 +42,7 @@ export const attendance = pgTable("attendance", {
   status: text("status").notNull(), // "hadir", "izin", "sakit", "alpha"
   notes: text("notes"),
   checkInTime: text("check_in_time"),
+  recordedBy: text("recorded_by"), // ID of the admin who recorded this
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -70,6 +71,7 @@ export const treasury = pgTable("treasury", {
   verifiedBy: text("verified_by"), // ID or Nama pengguna yang menyetujui
   verifiedAt: timestamp("verified_at"), // Waktu persetujuan
   createdBy: text("created_by").notNull().default("user"), // "user" or "AI_EXTRACTOR"
+  recordedBy: text("recorded_by"), // ID of the admin who manually recorded this
   aiMetadata: text("ai_metadata"), // JSON array of extracted items/confidence
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => {
@@ -158,6 +160,25 @@ export const selectNotificationSchema = createSelectSchema(notifications);
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+// User Notes table (Admin notes on user profiles - visible to member)
+export const userNotes = pgTable("user_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  adminId: varchar("admin_id").notNull().references(() => users.id),
+  note: text("note").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUserNoteSchema = createInsertSchema(userNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const selectUserNoteSchema = createSelectSchema(userNotes);
+
+export type InsertUserNote = z.infer<typeof insertUserNoteSchema>;
+export type UserNote = typeof userNotes.$inferSelect;
 
 // News table
 export const news = pgTable("news", {
@@ -346,3 +367,41 @@ export const selectFinancialSimulationSchema = createSelectSchema(financialSimul
 
 export type InsertFinancialSimulation = z.infer<typeof insertFinancialSimulationSchema>;
 export type FinancialSimulation = typeof financialSimulations.$inferSelect;
+
+// Volunteers table
+export const volunteers = pgTable("volunteers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  requirements: text("requirements").notNull(),
+  registrationLink: text("registration_link").notNull(),
+  status: text("status").notNull().default("open"), // "open" or "closed"
+  deadline: timestamp("deadline").notNull(),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertVolunteerSchema = createInsertSchema(volunteers, {
+  title: z.string().min(1, "Judul wajib diisi"),
+  description: z.string().min(1, "Deskripsi wajib diisi"),
+  requirements: z.string().min(1, "Persyaratan wajib diisi"),
+  registrationLink: z.string().min(1, "Link pendaftaran wajib diisi"),
+  status: z.enum(["open", "closed", "paused"]),
+  imageUrl: z.string().optional(),
+  // Use z.any() then transform to Date to be as safe as possible
+  deadline: z.any().transform((val) => {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) throw new Error("Format tanggal tidak valid");
+    return d;
+  }),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+
+
+export const selectVolunteerSchema = createSelectSchema(volunteers);
+
+export type InsertVolunteer = z.infer<typeof insertVolunteerSchema>;
+export type Volunteer = typeof volunteers.$inferSelect;

@@ -1,3 +1,4 @@
+import React from "react";
 import { useAuth } from "@/lib/auth";
 import { Link, useLocation } from "wouter";
 import {
@@ -9,7 +10,8 @@ import {
   Settings,
   Menu,
   Bell,
-  Brain
+  Brain,
+  User
 } from "lucide-react";
 import logoImage from "@assets/Kebutuhan_logo-04_1765812559569.png";
 import {
@@ -37,72 +39,58 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { AnimatePresence, motion } from "framer-motion";
 
-const PageTransition = ({ children }: { children: React.ReactNode }) => (
-  <motion.div
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-    exit={{ opacity: 0, x: 20 }}
-    transition={{ duration: 0.3, ease: "easeInOut" }}
-    className="w-full"
-  >
-    {children}
-  </motion.div>
-);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const [location] = useLocation();
 
-  const menuItems = [
+  // Null Guard: Prevent crash if context is not ready
+  if (isLoading || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin text-primary rounded-full border-2 border-current border-t-transparent" />
+          <p className="text-muted-foreground text-sm animate-pulse">Memuat Sesi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const menuItems = React.useMemo(() => [
     { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard" },
-    // AI Dashboard moved to admin items
     { title: "Absensi", icon: CalendarCheck, url: "/attendance" },
     { title: "Kas & Treasury", icon: Wallet, url: "/treasury" },
+    { title: "Profil Saya", icon: User, url: "/profile" },
     { title: "Notifikasi", icon: Bell, url: "/notifications" },
     { title: "Pengaturan", icon: Settings, url: "/settings" },
-  ];
+  ], []);
 
-  const adminItems = [
+  const adminItems = React.useMemo(() => [
     { title: "AI Dashboard", icon: Brain, url: "/ai-dashboard" },
     { title: "Anggota", icon: Users, url: "/members" },
-  ];
+  ], []);
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background pb-16 lg:pb-0">
+      <div className="flex min-h-screen w-full bg-background relative selection:bg-primary/10">
         <div className="hidden lg:block h-full">
+          {/* ... Sidebar ... */}
           <Sidebar collapsible="icon" className="border-r border-border shadow-soft h-full">
-            <SidebarHeader className="h-16 flex items-center justify-center border-b border-border px-4 bg-card">
-              <div className="flex items-center gap-3 w-full overflow-hidden transition-all duration-300 group-data-[collapsible=icon]:justify-center">
-                <img
-                  src={logoImage}
-                  alt="Meraki Berbagi Logo"
-                  className="h-10 w-10 object-contain shrink-0"
-                />
-                <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden" style={{ fontFamily: "'Paytone One', sans-serif" }}>
-                  <span className="font-bold text-2xl tracking-tight text-foreground drop-shadow-sm">Meraki</span>
-                  <span className="text-sm text-primary uppercase tracking-widest font-bold">Berbagi</span>
-                </div>
+            {/* Same content as before, keeping brevity */}
+            <SidebarHeader className="h-20 flex items-center justify-center border-b border-border px-4 bg-card">
+              <div className="flex items-center justify-center w-full transition-all duration-300 group-data-[collapsible=icon]:px-0">
+                <img src="/images/logo-meraki.png" alt="Meraki Berbagi Logo" className="h-14 w-auto object-contain shrink-0 group-data-[collapsible=icon]:h-12" />
               </div>
             </SidebarHeader>
-
             <SidebarContent className="px-3 py-6 gap-6">
               <SidebarGroup>
-                <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">
-                  Menu Utama
-                </SidebarGroupLabel>
+                <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">Menu Utama</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="gap-1">
                     {menuItems.map((item) => (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={location === item.url}
-                          tooltip={item.title}
-                          className="transition-all duration-200 hover:translate-x-1 hover:bg-accent/80 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm rounded-lg h-10"
-                        >
+                        <SidebarMenuButton asChild isActive={location === item.url} tooltip={item.title} className="transition-all duration-200 hover:translate-x-1 hover:bg-accent/80 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm rounded-lg h-10">
                           <Link href={item.url}>
                             <item.icon className="h-4 w-4" />
                             <span className="font-medium">{item.title}</span>
@@ -113,22 +101,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-
               {user?.role === "admin" && (
                 <SidebarGroup>
-                  <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">
-                    Admin Area
-                  </SidebarGroupLabel>
+                  <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">Admin Area</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu className="gap-1">
                       {adminItems.map((item) => (
                         <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={location === item.url}
-                            tooltip={item.title}
-                            className="transition-all duration-200 hover:translate-x-1 hover:bg-accent/80 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm rounded-lg h-10"
-                          >
+                          <SidebarMenuButton asChild isActive={location === item.url} tooltip={item.title} className="transition-all duration-200 hover:translate-x-1 hover:bg-accent/80 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm rounded-lg h-10">
                             <Link href={item.url}>
                               <item.icon className="h-4 w-4" />
                               <span className="font-medium">{item.title}</span>
@@ -141,7 +121,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </SidebarGroup>
               )}
             </SidebarContent>
-
             <SidebarFooter className="p-3 border-t border-border bg-card/50">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -168,26 +147,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Sidebar>
         </div>
 
-        <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ease-in-out">
-          <header className="h-16 border-b border-border flex items-center px-6 bg-background/80 backdrop-blur-lg sticky top-0 z-10 shadow-soft">
-            <SidebarTrigger className="mr-4 hover:bg-accent/80 rounded-lg transition-colors" />
-            <div className="flex-1">
-              <h1 className="text-lg font-heading font-bold capitalize bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                {location === "/" ? "Dashboard" : location.split("/")[1].replace("-", " ")}
-              </h1>
-            </div>
+        <main className="flex-1 relative flex flex-col min-h-screen w-full transition-all duration-300 ease-in-out bg-slate-50">
+          {/* Safe Area Guard - Instagram Style */}
+          <div className="h-[env(safe-area-inset-top,32px)] lg:h-0 bg-white/90 backdrop-blur-md sticky top-0 z-50" />
+
+          {/* Instagram-Style Header: Clean, Modern, 56px */}
+          <header className="h-14 shrink-0 border-b border-slate-100 flex items-center px-4 lg:px-6 bg-white/90 backdrop-blur-md sticky top-[env(safe-area-inset-top,32px)] lg:top-0 z-[40]">
+            <SidebarTrigger className="mr-3 lg:mr-4 hover:bg-slate-100 rounded-lg transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center" />
+            <h1 className="text-xl font-bold text-slate-900 flex-1">
+              {location === "/" ? "Dashboard" : location.split("/")[1].replace("-", " ").split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+            </h1>
           </header>
-          <div className="flex-1 overflow-auto p-4 lg:p-8 space-y-6 bg-gradient-to-br from-muted/30 via-background to-muted/20">
-            <div className="max-w-7xl mx-auto w-full">
-              <AnimatePresence mode="wait">
-                <PageTransition key={location}>
-                  {children}
-                </PageTransition>
-              </AnimatePresence>
+          <div className="flex-1 bg-gradient-to-br from-slate-50 via-white to-slate-50 pb-32 md:pb-8">
+            <div className="max-w-7xl mx-auto w-full px-4 lg:px-8 py-4 pb-32 relative">
+              {children}
             </div>
           </div>
         </main>
-        <BottomNav />
+        <div className="z-[40] will-change-transform opacity-[0.98]">
+          <BottomNav />
+        </div>
       </div>
     </SidebarProvider>
   );

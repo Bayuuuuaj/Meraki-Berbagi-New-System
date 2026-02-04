@@ -9,12 +9,15 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Configured for high performance with pooling
-export const queryClient = postgres(process.env.DATABASE_URL, {
-    max: 10,
+// ✅ DATABASE POOLING: Use ?sslmode=require for secure production connections
+const connectionString = process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '&' : '?') + "sslmode=require";
+
+export const queryClient = postgres(connectionString, {
+    max: 10, // Cap connections for free tier
     idle_timeout: 20,
     connect_timeout: 10,
     // Use SSL for production environments like Supabase/Neon
-    ssl: process.env.NODE_ENV === "production" ? "require" : false,
+    ssl: "require",
 });
 
 export const db = drizzle(queryClient, { schema });

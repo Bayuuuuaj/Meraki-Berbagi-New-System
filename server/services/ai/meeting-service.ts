@@ -10,7 +10,6 @@ import {
     tokenize,
     removeStopwords
 } from './ml-engine';
-import { GeminiService } from './gemini-service';
 
 // ==================== TYPES ====================
 
@@ -160,15 +159,13 @@ function getDayPreferenceScore(dayOfWeek: number): number {
 
 // ==================== MEETING SUMMARY ====================
 
-/**
- * Generate meeting summary from notes
- */
 export function generateMeetingSummary(
     notes: string,
     meetingTitle?: string
 ): string {
-    if (!notes || notes.trim().length === 0) {
-        return 'No meeting notes available.';
+    // Input Validation
+    if (!notes || notes.trim().length < 10 || /^(.)\1+$/.test(notes.replace(/\s/g, ''))) {
+        return 'Data tidak valid atau terlalu sedikit untuk dianalisis';
     }
 
     const keySentences = extractKeySentences(notes, 5);
@@ -181,9 +178,14 @@ export function generateMeetingSummary(
     }
 
     summary += `**Poin-poin Utama:**\n`;
-    keySentences.forEach((sentence, index) => {
-        summary += `${index + 1}. ${sentence}\n`;
-    });
+
+    if (keySentences.length === 0) {
+        summary += `1. Pembahasan umum mengenai agenda organisasi.\n`;
+    } else {
+        keySentences.forEach((sentence, index) => {
+            summary += `${index + 1}. ${sentence}\n`;
+        });
+    }
 
     if (keywords.length > 0) {
         summary += `\n**Topik Terkait:** ${keywords.join(', ')}`;
@@ -209,62 +211,52 @@ const PRIORITY_KEYWORDS = {
 };
 
 /**
- * Extract action items from meeting notes
+ * Extract action items from meeting notes (Pattern Recognition)
  */
 export function extractActionItems(notes: string): ActionItem[] {
     const actionItems: ActionItem[] = [];
-    const sentences = notes.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 10);
 
-    for (const sentence of sentences) {
-        const lowerSentence = sentence.toLowerCase();
+    // Input Validation
+    if (!notes || notes.trim().length < 10) return [];
 
-        // Check if sentence contains action keywords
-        const hasActionKeyword = ACTION_KEYWORDS.some(keyword =>
-            lowerSentence.includes(keyword)
-        );
+    const lines = notes.split(/[\n.!?]+/).map(s => s.trim()).filter(s => s.length > 5);
 
-        if (hasActionKeyword) {
-            // Determine priority
+    // Common Verbs + Names mapping
+    const VERBS = ['beli', 'kirim', 'siapkan', 'hubungi', 'buat', 'lapor', 'cek', 'ambil', 'kerjakan'];
+    const NAMES = ['bayu', 'andi', 'budi', 'siti', 'ayu', 'nina', 'doni', 'admin', 'bendahara', 'sekretaris'];
+
+    for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+
+        // 1. Check for Action Keywords
+        const hasKeyword = ACTION_KEYWORDS.some(k => lowerLine.includes(k)) ||
+            VERBS.some(v => lowerLine.includes(v));
+
+        if (hasKeyword) {
             let priority: 'low' | 'medium' | 'high' = 'medium';
+            if (PRIORITY_KEYWORDS.high.some(k => lowerLine.includes(k))) priority = 'high';
+            else if (PRIORITY_KEYWORDS.low.some(k => lowerLine.includes(k))) priority = 'low';
 
-            for (const keyword of PRIORITY_KEYWORDS.high) {
-                if (lowerSentence.includes(keyword)) {
-                    priority = 'high';
+            // 2. Extract Assignee using Name pattern
+            let assignee: string | undefined;
+            for (const name of NAMES) {
+                if (lowerLine.includes(name)) {
+                    assignee = name.charAt(0).toUpperCase() + name.slice(1);
                     break;
                 }
             }
 
-            if (priority === 'medium') {
-                for (const keyword of PRIORITY_KEYWORDS.low) {
-                    if (lowerSentence.includes(keyword)) {
-                        priority = 'low';
-                        break;
-                    }
-                }
-            }
-
-            // Extract potential assignee (look for names or @ mentions)
-            let assignee: string | undefined;
-            const mentionMatch = sentence.match(/@(\w+)/);
-            if (mentionMatch) {
-                assignee = mentionMatch[1];
-            }
-
-            // Extract potential deadline
+            // 3. Extract Deadline pattern (dd/mm/yyyy or dd-mm)
             let deadline: Date | undefined;
-            const dateMatch = sentence.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            const dateMatch = line.match(/(\d{1,2})[\/\-](\d{1,2})/);
             if (dateMatch) {
-                const [, day, month, year] = dateMatch;
-                deadline = new Date(
-                    parseInt(year.length === 2 ? '20' + year : year),
-                    parseInt(month) - 1,
-                    parseInt(day)
-                );
+                const now = new Date();
+                deadline = new Date(now.getFullYear(), parseInt(dateMatch[2]) - 1, parseInt(dateMatch[1]));
             }
 
             actionItems.push({
                 id: `action-${Date.now()}-${actionItems.length}`,
-                description: sentence,
+                description: line,
                 assignee,
                 deadline,
                 priority,
@@ -348,41 +340,25 @@ export async function generateMeetingInsights(
     const decisions = extractDecisions(notes);
     const nextAgenda = generateNextAgenda(actionItems);
 
-    let recommendations: string[] = [];
+    const recommendations: string[] = [];
 
-    // 1. Try Gemini for Strategic Recommendations (Smart Advice)
-    if (GeminiService.isAvailable()) {
-        const prompt = `Analyze these meeting notes and provide 3 strategic recommendations for improvement in Indonesian.
-        Context: Attendance Rate: ${attendanceRate * 100}%, Decisions: ${decisions.join(', ')}.
-        Notes: ${notes.substring(0, 1000)}`;
-
-        const geminiRecs = await GeminiService.generateJSON<{ recommendations: string[] }>(prompt);
-        if (geminiRecs?.recommendations) {
-            recommendations = geminiRecs.recommendations;
-        }
-    }
-
-    // 2. Fallback / Merge with Heuristics
-    // Attendance-based recommendations
+    // Recommendations based on heuristics
     if (attendanceRate < 0.7) {
         recommendations.push('Tingkat kehadiran rendah. Pertimbangkan untuk mengirim reminder atau menjadwal ulang.');
     }
 
-    // Duration-based recommendations
     if (meeting.duration > 90) {
         recommendations.push('Meeting berlangsung lama. Pertimbangkan untuk membagi menjadi sesi-sesi lebih pendek.');
     }
 
-    // Action items recommendations
     if (actionItems.length === 0) {
         recommendations.push('Tidak ada action items teridentifikasi. Pastikan ada tugas tindak lanjut yang jelas.');
-    } else if (actionItems.length > 10) {
-        recommendations.push('Banyak action items. Prioritaskan dan delegasikan tugas dengan jelas.');
     }
 
-    // Sentiment-based recommendations
     if (sentiment.label === 'negative') {
-        recommendations.push('Sentimen rapat cenderung negatif. Pertimbangkan one-on-one follow up.');
+        recommendations.push('Sentimen rapat cenderung negatif. Pertimbangkan diskusi empat mata untuk resolusi konflik.');
+    } else {
+        recommendations.push('Pertahankan kolaborasi positif yang sudah berjalan.');
     }
 
     return {

@@ -13,8 +13,8 @@ export default defineConfig({
     tailwindcss(),
     metaImagesPlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      registerType: 'prompt',
+      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Meraki-Berbagi Management',
         short_name: 'Meraki',
@@ -30,18 +30,18 @@ export default defineConfig({
             src: '/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any'
+            purpose: 'any maskable'
           },
           {
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           }
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,jpg,jpeg,webp}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -74,7 +74,8 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: false
+        enabled: true,
+        type: 'module'
       }
     }),
     ...(process.env.NODE_ENV !== "production" &&
@@ -108,14 +109,18 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: 5173,
+    port: 3000,
     hmr: {
-      host: "192.168.1.45",
+      protocol: "wss",
+      clientPort: 443,
     },
-    allowedHosts: true,
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+    },
+    allowedHosts: ["localhost", ".ngrok-free.dev", ".ngrok.io"],
     proxy: {
       "/api": {
-        target: "http://0.0.0.0:5000",
+        target: "http://0.0.0.0:3000",
         changeOrigin: true,
       },
     },

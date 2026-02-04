@@ -14,12 +14,15 @@ export async function apiRequest(
 ): Promise<Response> {
   const apiUrl = import.meta.env.VITE_API_URL || "";
 
-  // Get stored user ID for audit trail
+  // Get stored user data for audit trail and roles
   const storedUser = localStorage.getItem("meraki_user");
   let userId = "system";
+  let userRole = "guest";
   if (storedUser) {
     try {
-      userId = JSON.parse(storedUser).id;
+      const parsed = JSON.parse(storedUser);
+      userId = parsed.id;
+      userRole = parsed.role;
     } catch (e) {
       console.error("Failed to parse user for headers");
     }
@@ -29,9 +32,11 @@ export async function apiRequest(
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      "ngrok-skip-browser-warning": "true",
+      "ngrok-skip-browser-warning": "69420",
       "x-user-id": userId,
+      "x-user-role": userRole,
     },
+
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

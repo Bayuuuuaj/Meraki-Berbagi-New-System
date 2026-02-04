@@ -25,6 +25,9 @@ interface ExecutiveDashboardProps {
     onUploadClick: () => void;
     onExportClick: () => void;
     aiInsight?: string;
+    learningMode?: boolean;
+    pendingHITL?: number;
+    auditSummary?: string;
 }
 
 export default function ExecutiveDashboard({
@@ -32,15 +35,21 @@ export default function ExecutiveDashboard({
     aiLogs,
     onUploadClick,
     onExportClick,
-    aiInsight
+    aiInsight,
+    learningMode = false,
+    pendingHITL = 0,
+    auditSummary = ""
 }: ExecutiveDashboardProps) {
     const { toast } = useToast();
     const { isInstallable, installApp } = usePWAInstall();
 
     // 1. Logic: Health Score
-    const latestAudit = aiLogs[0] || { efficiencyScore: 8 };
-    const healthScore = latestAudit.efficiencyScore;
-    const isHealthy = healthScore >= 6;
+    const latestAudit = aiLogs[0];
+    const isDataEmpty = treasury.length === 0;
+    const isLearningMode = learningMode || !latestAudit || isDataEmpty;
+    const healthScoreData = latestAudit || { efficiencyScore: 0 };
+    const healthScore = isDataEmpty ? 0 : (healthScoreData.efficiencyScore || 0);
+    const isHealthy = !isLearningMode && healthScore >= 6;
 
     // 2. Logic: Runway & Balance
     const { runway, balance, activeAnomalies, recentActivity } = useMemo(() => {
@@ -96,6 +105,37 @@ export default function ExecutiveDashboard({
 
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
+            {/* 0. Human-in-the-Loop Verification Alert */}
+            {pendingHITL > 0 && (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 flex items-center justify-between animate-pulse">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-orange-500/20 p-2 rounded-lg">
+                            <Clock className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-orange-800">Ada {pendingHITL} nota menunggu tinjauan</p>
+                            <p className="text-xs text-orange-700/70">Segera verifikasi untuk menjaga akurasi laporan AI.</p>
+                        </div>
+                    </div>
+                    <Button size="sm" onClick={onUploadClick} className="bg-orange-600 hover:bg-orange-700 text-white border-none">
+                        Tinjau Sekarang
+                    </Button>
+                </div>
+            )}
+            {pendingHITL === 0 && treasury.length > 0 && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-emerald-500/20 p-2 rounded-lg">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-emerald-800">Tidak ada antrean nota</p>
+                            <p className="text-xs text-emerald-700/70">Semua nota AI telah diverifikasi dan masuk laporan.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Hero Insight (Glassmorphism) */}
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 p-8 shadow-2xl">
                 <div className="absolute top-0 right-0 -m-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
@@ -110,13 +150,13 @@ export default function ExecutiveDashboard({
                             <span className="px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-400/30 text-[10px] uppercase font-bold tracking-widest text-indigo-100">
                                 AI Intelligence View
                             </span>
-                            <Badge variant="outline" className={`border-none ${isHealthy ? 'bg-emerald-400/20 text-emerald-300' : 'bg-orange-400/20 text-orange-300'}`}>
-                                Health Score: {healthScore}/10
+                            <Badge variant="outline" className={`border-none ${isLearningMode ? 'bg-blue-400/20 text-blue-300' : isHealthy ? 'bg-emerald-400/20 text-emerald-300' : 'bg-orange-400/20 text-orange-300'}`}>
+                                {isLearningMode ? 'Status: Learning Mode' : `Health Score: ${healthScore}/10`}
                             </Badge>
                         </div>
                         <h2 className="text-2xl font-bold font-heading text-white mb-2">Halo Ketua, Berikut Ringkasan Organisasi</h2>
                         <p className="text-indigo-100 text-lg italic leading-relaxed max-w-2xl font-medium">
-                            "{aiInsight || 'Menganalisis tren keuangan Anda... Tunggu sebentar untuk wawasan strategis.'}"
+                            "{aiInsight || (isDataEmpty ? 'Sistem siap menerima data untuk analisis perdana' : isLearningMode ? (auditSummary || 'AI sedang dalam Learning Mode. Silakan unggah nota atau transaksi pertama Anda untuk mulai menganalisis kesehatan organisasi.') : 'Menganalisis tren keuangan Anda... Tunggu sebentar untuk wawasan strategis.')}"
                         </p>
                     </div>
                     <div className="flex flex-col gap-2 w-full md:w-auto">
@@ -251,15 +291,15 @@ export default function ExecutiveDashboard({
                         </CardHeader>
                         <CardContent>
                             <div className="flex flex-col items-center justify-center p-6 text-center">
-                                <div className={`text-6xl font-bold mb-2 ${isHealthy ? 'text-primary' : 'text-orange-500 animate-pulse'}`}>
+                                <div className={`text-6xl font-bold mb-2 ${isLearningMode ? 'text-blue-400' : isHealthy ? 'text-primary' : 'text-orange-500 animate-pulse'}`}>
                                     {healthScore}
-                                    <span className="text-xl text-muted-foreground">/10</span>
+                                    {!isLearningMode && <span className="text-xl text-muted-foreground">/10</span>}
                                 </div>
-                                <p className={`text-sm font-bold uppercase tracking-widest ${isHealthy ? 'text-emerald-500' : 'text-orange-500'}`}>
-                                    {healthScore < 6 ? 'STATUS: WASPADA' : 'STATUS: SEHAT'}
+                                <p className={`text-sm font-bold uppercase tracking-widest ${isLearningMode ? 'text-blue-400' : isHealthy ? 'text-emerald-500' : 'text-orange-500'}`}>
+                                    {isLearningMode ? 'STATUS: LEARNING' : healthScore < 6 ? 'STATUS: WASPADA' : 'STATUS: SEHAT'}
                                 </p>
                                 <p className="text-xs text-muted-foreground mt-4 italic max-w-xs">
-                                    "{isHealthy ? 'Pertahankan efisiensi program kerja bulan ini.' : 'Segera tinjau anomali pengeluaran logistik.'}"
+                                    "{isDataEmpty ? 'Sistem siap menerima data untuk analisis perdana' : isLearningMode ? (auditSummary || 'Kumpulkan data awal untuk mengaktifkan AI Advisor.') : isHealthy ? 'Pertahankan efisiensi program kerja bulan ini.' : 'Segera tinjau anomali pengeluaran logistik.'}"
                                 </p>
                             </div>
                         </CardContent>

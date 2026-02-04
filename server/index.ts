@@ -32,9 +32,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 app.use(cors({
-  origin: process.env.NODE_ENV === "production"
-    ? [process.env.ALLOWED_ORIGIN || "", "http://localhost:5000", "http://localhost:5173", /^https:\/\/.*\.trycloudflare\.com$/, /^https:\/\/.*\.loca\.lt$/, /^https:\/\/.*\.ngrok\.io$/, /^https:\/\/.*\.ngrok-free\.dev$/]
-    : ["http://192.168.1.45:5173", "http://localhost:5173", /^https:\/\/.*\.trycloudflare\.com$/, /^https:\/\/.*\.ngrok\.io$/, /^https:\/\/.*\.ngrok-free\.dev$/],
+  origin: "*", // Permissive during tunnel debugging to fix mobile white screen
   credentials: true
 }));
 
@@ -82,6 +80,15 @@ async function main() {
   // Register AI routes
   registerAIRoutes(app);
 
+  // ✅ HEALTH CHECK ROUTE: For Render & Cron-job.org keep-alive
+  app.get('/api/health', (_req, res) => {
+    res.status(200).json({
+      status: 'Online',
+      engine: 'Offline-First Heuristic',
+      timestamp: new Date().toISOString()
+    });
+  });
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(err.status || 500).json({
       message: err.message || "Internal Server Error",
@@ -95,9 +102,10 @@ async function main() {
     await setupVite(httpServer, app);
   }
 
+  // ✅ DYNAMIC PORT: Render will provide the port via process.env.PORT
   const port = parseInt(process.env.PORT || "3000");
   httpServer.listen(port, "0.0.0.0", () => {
-    log(`serving on http://0.0.0.0:${port}`);
+    log(`Antigravity Engine Aktif di Port ${port}`);
   });
 }
 

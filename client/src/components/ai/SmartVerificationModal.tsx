@@ -21,6 +21,8 @@ interface SmartVerificationModalProps {
         proof?: string;
         aiNotes?: string;
         confidenceScore?: number;
+        aiMetadata?: string;
+        isInvalid?: boolean;
     } | null;
     onVerify: (updatedData: any) => Promise<void>;
 }
@@ -139,8 +141,13 @@ export default function SmartVerificationModal({
                                         type="number"
                                         value={formData?.amount}
                                         onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) })}
-                                        className="h-11 bg-background/50 border-primary/10 focus:border-primary transition-all font-bold text-lg text-primary"
+                                        className={`h-11 bg-background/50 border-primary/10 focus:border-primary transition-all font-bold text-lg ${receiptData.isInvalid ? 'text-rose-500 bg-rose-50/50' : 'text-primary'}`}
                                     />
+                                    {receiptData.isInvalid && (
+                                        <p className="text-[10px] text-rose-500 font-bold flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" /> Nominal tidak terbaca sempurna. Mohon cek manual.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -165,6 +172,21 @@ export default function SmartVerificationModal({
                                             className="h-11 bg-background/50 border-primary/10 focus:border-primary transition-all"
                                         />
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* ✅ RAW OCR READOUT SECTION */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                                    <FileText className="w-3 h-3" /> Raw OCR Readout (Debug)
+                                </Label>
+                                <div className="p-3 bg-muted/30 rounded-lg border border-border/50 max-h-32 overflow-y-auto">
+                                    <code className="text-[10px] text-muted-foreground font-mono whitespace-pre-wrap leading-tight">
+                                        {receiptData.aiMetadata
+                                            ? JSON.parse(receiptData.aiMetadata).rawText || "Tidak ada teks mentah tersedia."
+                                            : "Memproses data..."
+                                        }
+                                    </code>
                                 </div>
                             </div>
 
