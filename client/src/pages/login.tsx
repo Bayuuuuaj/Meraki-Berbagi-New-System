@@ -126,41 +126,7 @@ export default function LoginPage() {
         </form>
       </Form>
 
-      <div className="relative my-8">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">
-            Atau lanjutkan sebagai
-          </span>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 text-xs border-dashed border-border hover:bg-accent/50 hover:border-primary/50"
-          onClick={() => {
-            form.setValue("email", "admin@meraki.org");
-            form.setValue("password", "admin123");
-          }}
-        >
-          Demo Admin
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 text-xs border-dashed border-border hover:bg-accent/50 hover:border-primary/50"
-          onClick={() => {
-            form.setValue("email", "anggota@meraki.org");
-            form.setValue("password", "anggota123");
-          }}
-        >
-          Demo Anggota
-        </Button>
-      </div>
     </AuthLayout>
   );
 }
