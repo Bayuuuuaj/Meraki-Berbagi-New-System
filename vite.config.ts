@@ -41,8 +41,34 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,jpg,jpeg,webp}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+        // Exclude large images from precaching - they will be loaded on-demand
+        globIgnores: [
+          '**/theana.png',
+          '**/syifa.png',
+          '**/rehan.png',
+          '**/meraki-volunteers.jpg',
+          '**/founder.png',
+          '**/ega.png',
+          '**/dita.png',
+          '**/adisti.png',
+          '**/qr_code_placeholder.png',
+          '**/*.{png,jpg,jpeg,webp}' // Exclude all images from precache, load on-demand
+        ],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3MB limit
         runtimeCaching: [
+          {
+            // Cache images on-demand with network-first strategy
+            urlPattern: /\.(?:png|jpg|jpeg|webp|gif)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+              }
+            }
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
