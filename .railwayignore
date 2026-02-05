@@ -1,37 +1,43 @@
-# Railway Ignore
-# Ignore heavy dependencies
+# Railway Ignore - Optimized for Fast Builds
+
+# === HEAVY DIRECTORIES ===
 node_modules/
-attached_assets/
 .git/
 .vscode/
+.local/
+attached_assets/
 
-# Ignore build outputs
+# === BUILD OUTPUTS (will be regenerated) ===
 dist/
 .vite/
 .output/
-...
+.cache/
 
-# Ignore git
-.git/
-
-# Ignore large log files that cause timeout
+# === LARGE FILES (cause timeout) ===
 *.log
 *.txt
 *.csv
-dev_server.log
-ngrok_port3000.log
+*.zip
+*.tar.gz
 
-# Ignore heavy tesseract data if any
-server/cache/tesseract/
+# === CACHE & TEMP ===
+server/cache/
+.drizzle/
+coverage/
 
-# Keep the basics
-!.gitignore
-!package.json
-!railway.json
-!Procfile
-!server/
-!client/
-!shared/
-!script/
-!drizzle.config.ts
-!tsconfig.json
+# === SENSITIVE (set via Railway Variables) ===
+.env
+.env.*
+
+# === REPLIT SPECIFIC ===
+.replit
+.upm/
+.config/
+
+# === TEST FILES ===
+server/test-*.ts
+server/test-*.log
+
+# === DOCUMENTATION (optional) ===
+*.md
+!README.md
